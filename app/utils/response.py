@@ -14,10 +14,8 @@ def create_response(code: int, message: str, data: Optional[Any] = None) -> dict
     """
     response = {
         "code": code,
-        "message": message
+        "message": message,
+        "data": data
     }
-    
-    if data is not None:
-        response["data"] = data
     
     return response
