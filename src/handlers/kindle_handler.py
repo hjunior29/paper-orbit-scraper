@@ -1,9 +1,9 @@
-from app.services.kindle_scraper_service import KindleScraperService
-from app.services.crypto_service import CryptoService
+from src.services.kindle_scraper_service import KindleScraperService
+from src.services.crypto_service import CryptoService
 import logging
 import urllib.parse
 
-from app.utils.response import create_response
+from src.utils.response import create_response
 
 logger = logging.getLogger(__name__)
 

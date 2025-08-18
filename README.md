@@ -199,7 +199,7 @@ curl "http://localhost:8000/kindle/highlights?email=your@email.com&password=your
 
 ```
 ├── venv/                           # Virtual environment
-├── app/
+├── src/
 │   ├── __init__.py
 │   ├── routes.py                   # Application routes
 │   ├── services/

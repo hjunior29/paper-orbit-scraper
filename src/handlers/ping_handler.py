@@ -1,4 +1,4 @@
-from app.utils.response import create_response
+from src.utils.response import create_response
 import logging
 
 logger = logging.getLogger(__name__)

@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI
-from app import routes
+from src import routes
 from config.logging_config import setup_logging
 import logging
 

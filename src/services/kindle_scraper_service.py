@@ -1,7 +1,7 @@
 from playwright.sync_api import sync_playwright
-from app.models.kindle_models import Highlight
-from app.utils.response import create_response
-from app.utils.scraper import human_type, human_click
+from src.models.kindle_models import Highlight
+from src.utils.response import create_response
+from src.utils.scraper import human_type, human_click
 from typing import List
 import random
 import time

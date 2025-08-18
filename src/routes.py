@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
-from app.handlers.kindle_handler import KindleHandler
-from app.handlers.ping_handler import PingHandler
+from src.handlers.kindle_handler import KindleHandler
+from src.handlers.ping_handler import PingHandler
 import logging
 
 router = APIRouter()
