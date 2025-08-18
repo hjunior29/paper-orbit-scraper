@@ -2,10 +2,12 @@ from playwright.sync_api import sync_playwright
 from src.models.kindle_models import Highlight
 from src.utils.response import create_response
 from src.utils.scraper import human_type, human_click
-from typing import List
+from typing import List, Optional
 import random
 import time
 import logging
+import re
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +15,58 @@ class KindleScraperService:
     def __init__(self, headless: bool = True):
         self.headless = headless
         self.kindle_notebook_url = "https://read.amazon.com/notebook"
+        self.puzzle_selectors = [
+            'text=puzzle',
+            'text=/puzzle/i',
+            'text="Solve this puzzle"',
+            'text="Authentication required"',
+            'iframe[title*="verification"]',
+            'iframe[title*="puzzle"]',
+            '.cvf-widget-container',
+            '#cvf-aamation-challenge-iframe'
+        ]
         logger.info(f"KindleScraperService initialized with headless={headless}")
+    
+    def _parse_authors(self, author_text: str) -> List[str]:
+        """Parse author text and split by common delimiters"""
+        if not author_text:
+            return ["Unknown Author"]
+        
+        # Remove "By: " prefix if present
+        if author_text.startswith("By: "):
+            author_text = author_text[4:]
+        
+        # Split by common delimiters and clean up
+        authors = re.split(r',|\band\b', author_text, flags=re.IGNORECASE)
+        authors = [author.strip() for author in authors if author.strip()]
+        
+        return authors if authors else ["Unknown Author"]
+    
+    def _parse_date(self, date_input: str) -> Optional[str]:
+        """Parse date from input field value and convert to mm-dd-yyyy format
+        
+        Args:
+            date_input: Expected format like "Sunday August 17, 2025" or "August 17, 2025"
+            
+        Returns:
+            Formatted date string in mm-dd-yyyy format or None if parsing fails
+        """
+        if not date_input:
+            return None
+        
+        try:
+            date_parts = date_input.split(maxsplit=1)
+            if len(date_parts) > 1:
+                date_str = date_parts[1]
+            else:
+                date_str = date_input
+            
+            parsed_date = datetime.strptime(date_str, "%B %d, %Y")
+            
+            return parsed_date.strftime("%m-%d-%Y")
+        except ValueError:
+            logger.warning(f"Could not parse date: {date_input}")
+            return None
     
     def get_highlights(self, email: str, password: str) -> dict:
         logger.info("Starting highlights scraping process")
@@ -51,6 +104,25 @@ class KindleScraperService:
                 logger.debug("Sign in button clicked")
 
                 logger.info("Waiting for highlights page to load")
+                
+                try:
+                    for selector in self.puzzle_selectors:
+                        try:
+                            puzzle_element = page.wait_for_selector(selector, timeout=1000)
+                            if puzzle_element:
+                                logger.error(f"Puzzle/captcha detected with selector: {selector}")
+                                browser.close()
+                                return create_response(
+                                    code=400,
+                                    message="Authentication blocked by puzzle/captcha. Please try again later.",
+                                    data=None
+                                )
+                        except:
+                            continue
+                except:
+                    # No puzzle found, continue normally
+                    pass
+                
                 page.wait_for_selector('.kp-notebook-library-each-book')
                 logger.debug("Highlights page loaded successfully")
 
@@ -58,10 +130,17 @@ class KindleScraperService:
                 logger.info(f"Found {len(books)} books in library")
                 
                 book_to_title = dict[str, str]()
+                book_to_author = dict[str, List[str]]()
                 for book in books:
                     title = book.query_selector('h2.kp-notebook-searchable')
+                    author = book.query_selector('p.a-spacing-base.a-color-secondary')
                     if title:
                         book_to_title[book.inner_text()] = title.inner_text()
+                        if author:
+                            author_text = author.inner_text().strip()
+                            book_to_author[book.inner_text()] = self._parse_authors(author_text)
+                        else:
+                            book_to_author[book.inner_text()] = ["Unknown Author"]
                 
                 logger.debug(f"Mapped {len(book_to_title)} book titles")
 
@@ -70,8 +149,11 @@ class KindleScraperService:
                 books_processed = 0
                 
                 for i, book in enumerate(books):
-                    book_title = book_to_title[book.inner_text()]
-                    logger.info(f"Processing book {i+1}/{len(books)}: {book_title}")
+                    book_key = book.inner_text()
+                    book_title = book_to_title[book_key]
+                    book_authors = book_to_author.get(book_key, ["Unknown Author"])
+                    authors_str = ", ".join(book_authors)
+                    logger.info(f"Processing book {i+1}/{len(books)}: {book_title} by {authors_str}")
                     
                     delay = random.uniform(0.5, 1.5)
                     logger.debug(f"Waiting {delay:.2f}s before clicking book")
@@ -88,11 +170,20 @@ class KindleScraperService:
                     highlights = page.query_selector_all('.kp-notebook-highlight')
                     logger.info(f'Found {len(highlights)} highlights for book: {book_title}')
                     
+                    date_span = page.query_selector('span#kp-notebook-annotated-date')
+                    highlight_date = None
+                    if date_span:
+                        date_text = date_span.inner_text().strip()
+                        highlight_date = self._parse_date(date_text)
+                        logger.debug(f"Extracted date: {date_text} -> {highlight_date}")
+                    
                     for j, h in enumerate(highlights):
                         highlight_text = h.inner_text().strip()
                         highlight = Highlight(
                             book_title=book_title,
+                            book_author=book_authors,
                             highlight_text=highlight_text,
+                            date=highlight_date,
                             location=None,  # Location info would need additional scraping
                             note=None       # Note info would need additional scraping
                         )
