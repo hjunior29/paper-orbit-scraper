@@ -129,47 +129,80 @@ class KindleScraperService:
                 books = page.query_selector_all('.kp-notebook-library-each-book')
                 logger.info(f"Found {len(books)} books in library")
                 
-                book_to_title = dict[str, str]()
-                book_to_author = dict[str, List[str]]()
-                book_to_cover = dict[str, str]()
+                # Extract book info with unique IDs
+                book_data = []
                 for book in books:
-                    title = book.query_selector('h2.kp-notebook-searchable')
-                    author = book.query_selector('p.a-spacing-base.a-color-secondary')
-                    cover_img = book.query_selector('img.kp-notebook-cover-image')
-                    if title:
-                        book_key = book.inner_text()
-                        book_to_title[book_key] = title.inner_text()
+                    book_id = book.get_attribute('id')
+                    title_elem = book.query_selector('h2.kp-notebook-searchable')
+                    author_elem = book.query_selector('p.a-spacing-base.a-color-secondary')
+                    cover_elem = book.query_selector('img.kp-notebook-cover-image')
+                    
+                    if title_elem and book_id:
+                        title = title_elem.inner_text()
+                        authors = ["Unknown Author"]
+                        if author_elem:
+                            author_text = author_elem.inner_text().strip()
+                            authors = self._parse_authors(author_text)
                         
-                        if author:
-                            author_text = author.inner_text().strip()
-                            book_to_author[book_key] = self._parse_authors(author_text)
-                        else:
-                            book_to_author[book_key] = ["Unknown Author"]
+                        cover_url = None
+                        if cover_elem:
+                            cover_url = cover_elem.get_attribute('src')
                         
-                        if cover_img:
-                            cover_url = cover_img.get_attribute('src')
-                            book_to_cover[book_key] = cover_url
-                        else:
-                            book_to_cover[book_key] = None
+                        book_data.append({
+                            'id': book_id,
+                            'title': title,
+                            'authors': authors,
+                            'cover': cover_url
+                        })
                 
-                logger.debug(f"Mapped {len(book_to_title)} book titles")
+                logger.debug(f"Mapped {len(book_data)} book titles")
 
                 logger.info("Starting to process books for highlights extraction")
                 all_highlights: List[Highlight] = []
                 books_processed = 0
                 
-                for i, book in enumerate(books):
-                    book_key = book.inner_text()
-                    book_title = book_to_title[book_key]
-                    book_authors = book_to_author.get(book_key, ["Unknown Author"])
-                    book_cover = book_to_cover.get(book_key)
+                for i, book_info in enumerate(book_data):
+                    book_id = book_info['id']
+                    book_title = book_info['title']
+                    book_authors = book_info['authors']
+                    book_cover = book_info['cover']
                     authors_str = ", ".join(book_authors)
-                    logger.info(f"Processing book {i+1}/{len(books)}: {book_title} by {authors_str}")
+                    logger.info(f"Processing book {i+1}/{len(book_data)}: {book_title} by {authors_str}")
                     
-                    delay = random.uniform(0.5, 1.5)
-                    logger.debug(f"Waiting {delay:.2f}s before clicking book")
-                    time.sleep(delay)
-                    human_click(page, book)
+                    page.evaluate(f"""
+                        const book = document.querySelector('#{book_id}');
+                        const scroller = document.querySelector('.a-scroller.kp-notebook-scroller-addon.a-scroller-vertical');
+                        if (book && scroller) {{
+                            const bookRect = book.getBoundingClientRect();
+                            const scrollerRect = scroller.getBoundingClientRect();
+                            const offset = bookRect.top - scrollerRect.top + scroller.scrollTop - 50;
+                            scroller.scrollTop = Math.max(0, offset);
+                        }}
+                    """)
+                    
+                    time.sleep(random.uniform(0.3, 0.8))
+                    
+                    action_selector = f'#{book_id} span[data-action="get-annotations-for-asin"]'
+                    action_element = page.query_selector(action_selector)
+                    if action_element:
+                        delay = random.uniform(0.5, 1.5)
+                        logger.debug(f"Waiting {delay:.2f}s before clicking book action span")
+                        time.sleep(delay)
+                        human_click(page, action_element)
+                        clicked = True
+                        logger.debug(f"Successfully clicked action span for {book_id}")
+                    else:
+                        book_element = page.query_selector(f'#{book_id}')
+                        if book_element:
+                            delay = random.uniform(0.5, 1.5)
+                            time.sleep(delay)
+                            human_click(page, book_element)
+                            clicked = True
+                            logger.debug(f"Successfully clicked book container for {book_id}")
+                    
+                    if not clicked:
+                        logger.warning(f"Could not find any clickable element for book {book_id}")
+                        continue
                     
                     logger.debug("Waiting for highlights to load")
                     page.wait_for_selector('.kp-notebook-highlight')
@@ -204,6 +237,7 @@ class KindleScraperService:
                     
                     books_processed += 1
                     logger.info(f"Completed processing book {i+1}: {book_title} ({len(highlights)} highlights)")
+                    
 
                 logger.debug("Closing browser")
                 browser.close()
