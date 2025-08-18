@@ -131,16 +131,26 @@ class KindleScraperService:
                 
                 book_to_title = dict[str, str]()
                 book_to_author = dict[str, List[str]]()
+                book_to_cover = dict[str, str]()
                 for book in books:
                     title = book.query_selector('h2.kp-notebook-searchable')
                     author = book.query_selector('p.a-spacing-base.a-color-secondary')
+                    cover_img = book.query_selector('img.kp-notebook-cover-image')
                     if title:
-                        book_to_title[book.inner_text()] = title.inner_text()
+                        book_key = book.inner_text()
+                        book_to_title[book_key] = title.inner_text()
+                        
                         if author:
                             author_text = author.inner_text().strip()
-                            book_to_author[book.inner_text()] = self._parse_authors(author_text)
+                            book_to_author[book_key] = self._parse_authors(author_text)
                         else:
-                            book_to_author[book.inner_text()] = ["Unknown Author"]
+                            book_to_author[book_key] = ["Unknown Author"]
+                        
+                        if cover_img:
+                            cover_url = cover_img.get_attribute('src')
+                            book_to_cover[book_key] = cover_url
+                        else:
+                            book_to_cover[book_key] = None
                 
                 logger.debug(f"Mapped {len(book_to_title)} book titles")
 
@@ -152,6 +162,7 @@ class KindleScraperService:
                     book_key = book.inner_text()
                     book_title = book_to_title[book_key]
                     book_authors = book_to_author.get(book_key, ["Unknown Author"])
+                    book_cover = book_to_cover.get(book_key)
                     authors_str = ", ".join(book_authors)
                     logger.info(f"Processing book {i+1}/{len(books)}: {book_title} by {authors_str}")
                     
@@ -182,6 +193,7 @@ class KindleScraperService:
                         highlight = Highlight(
                             book_title=book_title,
                             book_author=book_authors,
+                            book_cover=book_cover,
                             highlight_text=highlight_text,
                             date=highlight_date,
                             location=None,  # Location info would need additional scraping
