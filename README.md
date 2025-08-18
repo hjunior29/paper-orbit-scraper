@@ -81,7 +81,7 @@ With `--reload`, the server automatically restarts when code changes are detecte
 ## Available Endpoints
 
 ### Basic Endpoints
-- `GET /hello` - Returns a Hello World message
+- `GET /ping` - Returns a ping response for health checks
 
 ### Kindle Highlights Endpoints
 - `GET /kindle/highlights` - Get Kindle highlights (supports both plain text and encrypted credentials)
