@@ -1,8 +1,9 @@
 from typing import Any, Optional
+from fastapi.responses import JSONResponse
 
-def create_response(code: int, message: str, data: Optional[Any] = None) -> dict:
+def create_response(code: int, message: str, data: Optional[Any] = None) -> JSONResponse:
     """
-    Create a standardized JSON response.
+    Create a standardized JSON response with proper HTTP status code.
     
     Args:
         code (int): HTTP status code
@@ -10,12 +11,12 @@ def create_response(code: int, message: str, data: Optional[Any] = None) -> dict
         data (Optional[Any]): Response data
     
     Returns:
-        dict: Standardized response format
+        JSONResponse: FastAPI response with proper status code
     """
-    response = {
+    response_data = {
         "code": code,
         "message": message,
         "data": data
     }
     
-    return response
+    return JSONResponse(content=response_data, status_code=code)

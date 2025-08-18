@@ -1,16 +1,11 @@
 from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI
 from app import routes
+from config.logging_config import setup_logging
 import logging
-import os
 
-load_dotenv()
-
-log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, log_level),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Paper Orbit Scraper", version="1.0.0")
@@ -19,4 +14,7 @@ app.include_router(routes.router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    
+    log_level = os.getenv("LOG_LEVEL", "INFO").lower()
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level=log_level)

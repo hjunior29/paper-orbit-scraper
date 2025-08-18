@@ -20,7 +20,6 @@ def human_type(element, text: str):
             
             # 3% chance of typing a wrong character first
             if random.random() < 0.03 and i > 0:
-                # Type a random wrong character
                 wrong_chars = 'abcdefghijklmnopqrstuvwxyz'
                 wrong_char = random.choice(wrong_chars)
                 element.type(wrong_char)

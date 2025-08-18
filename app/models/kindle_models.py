@@ -6,8 +6,3 @@ class Highlight(BaseModel):
     highlight_text: str
     location: Optional[str] = None
     note: Optional[str] = None
-
-# class KindleHighlightsResponse(BaseModel):
-#     highlights: List[Highlight]
-#     total_count: int
-#     books_processed: int

@@ -26,41 +26,34 @@ class KindleScraperService:
                 page = context.new_page()
                 logger.debug("Browser and page created successfully")
 
-                # Go to Amazon login page
                 logger.info(f"Navigating to {self.kindle_notebook_url}")
                 page.goto(self.kindle_notebook_url)
                 logger.debug("Login page loaded")
 
-                # Fill in email with human-like typing
                 logger.info("Filling email field")
                 email_input = page.locator('input[name="email"]')
                 human_type(email_input, email)
                 
-                # Random delay before clicking
                 delay = random.uniform(1, 2)
                 logger.debug(f"Waiting {delay:.2f}s before clicking continue")
                 time.sleep(delay)
                 page.click('input#continue')
                 logger.debug("Continue button clicked")
 
-                # Fill in password with human-like typing
                 logger.info("Filling password field")
                 password_input = page.locator('input[name="password"]')
                 human_type(password_input, password)
                 
-                # Random delay before clicking
                 delay = random.uniform(1, 2)
                 logger.debug(f"Waiting {delay:.2f}s before clicking sign in")
                 time.sleep(delay)
                 page.click('input#signInSubmit')
                 logger.debug("Sign in button clicked")
 
-                # Wait for highlights page to load
                 logger.info("Waiting for highlights page to load")
                 page.wait_for_selector('.kp-notebook-library-each-book')
                 logger.debug("Highlights page loaded successfully")
 
-                # Scrape highlights (basic example: print book titles)
                 books = page.query_selector_all('.kp-notebook-library-each-book')
                 logger.info(f"Found {len(books)} books in library")
                 
@@ -72,7 +65,6 @@ class KindleScraperService:
                 
                 logger.debug(f"Mapped {len(book_to_title)} book titles")
 
-                # Iterate over all books, click each, and extract highlights
                 logger.info("Starting to process books for highlights extraction")
                 all_highlights: List[Highlight] = []
                 books_processed = 0
@@ -81,23 +73,18 @@ class KindleScraperService:
                     book_title = book_to_title[book.inner_text()]
                     logger.info(f"Processing book {i+1}/{len(books)}: {book_title}")
                     
-                    # navigate into each book page (although it's an SPA)
-                    # Add random delay and human-like movement before clicking
                     delay = random.uniform(0.5, 1.5)
                     logger.debug(f"Waiting {delay:.2f}s before clicking book")
                     time.sleep(delay)
                     human_click(page, book)
                     
-                    # Wait for highlights to load 
                     logger.debug("Waiting for highlights to load")
                     page.wait_for_selector('.kp-notebook-highlight')
                     
-                    # Add small delay after loading
                     delay = random.uniform(0.3, 0.8)
                     logger.debug(f"Waiting {delay:.2f}s after highlights loaded")
                     time.sleep(delay)
                     
-                    # Get all highlight elements
                     highlights = page.query_selector_all('.kp-notebook-highlight')
                     logger.info(f'Found {len(highlights)} highlights for book: {book_title}')
                     
@@ -122,7 +109,7 @@ class KindleScraperService:
                 return create_response(
                     code=200,
                     message="Highlights scraped successfully",
-                    data=all_highlights
+                    data=[highlight.model_dump() for highlight in all_highlights]
                 )
 
         except Exception as e:
