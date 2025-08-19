@@ -1,5 +1,5 @@
 from playwright.sync_api import sync_playwright
-from src.models.kindle_models import Highlight
+from src.models.kindle_models import Highlight, HighlightItem
 from src.utils.response import create_response
 from src.utils.scraper import human_type, human_click
 from typing import List, Optional
@@ -158,7 +158,7 @@ class KindleScraperService:
                 logger.debug(f"Mapped {len(book_data)} book titles")
 
                 logger.info("Starting to process books for highlights extraction")
-                all_highlights: List[Highlight] = []
+                all_books_highlights: List[Highlight] = []
                 books_processed = 0
                 
                 for i, book_info in enumerate(book_data):
@@ -211,8 +211,8 @@ class KindleScraperService:
                     logger.debug(f"Waiting {delay:.2f}s after highlights loaded")
                     time.sleep(delay)
                     
-                    highlights = page.query_selector_all('.kp-notebook-highlight')
-                    logger.info(f'Found {len(highlights)} highlights for book: {book_title}')
+                    highlight_containers = page.query_selector_all('.a-row.a-spacing-base')
+                    logger.info(f'Found {len(highlight_containers)} highlight containers for book: {book_title}')
                     
                     date_span = page.query_selector('span#kp-notebook-annotated-date')
                     highlight_date = None
@@ -221,32 +221,51 @@ class KindleScraperService:
                         highlight_date = self._parse_date(date_text)
                         logger.debug(f"Extracted date: {date_text} -> {highlight_date}")
                     
-                    for j, h in enumerate(highlights):
-                        highlight_text = h.inner_text().strip()
-                        highlight = Highlight(
+                    book_highlights = []
+                    for container in highlight_containers:
+                        # Extract highlight text
+                        highlight_elem = container.query_selector('.kp-notebook-highlight')
+                        if not highlight_elem:
+                            continue
+                            
+                        highlight_text = highlight_elem.inner_text().strip()
+                        
+                        # Extract note if present
+                        note_elem = container.query_selector('.kp-notebook-note span#note')
+                        note_text = None
+                        if note_elem:
+                            note_text = note_elem.inner_text().strip()
+                            if not note_text:
+                                note_text = None
+                        
+                        book_highlights.append(HighlightItem(
+                            text=highlight_text,
+                            note=note_text
+                        ))
+                    
+                    if book_highlights:
+                        book_highlight = Highlight(
                             book_title=book_title,
                             book_author=book_authors,
                             book_cover=book_cover,
-                            highlight_text=highlight_text,
-                            date=highlight_date,
-                            location=None,  # Location info would need additional scraping
-                            note=None       # Note info would need additional scraping
+                            highlights=book_highlights,
+                            date=highlight_date
                         )
-                        all_highlights.append(highlight)
-                        logger.debug(f"Processed highlight {j+1}/{len(highlights)} from {book_title}")
+                        all_books_highlights.append(book_highlight)
                     
                     books_processed += 1
-                    logger.info(f"Completed processing book {i+1}: {book_title} ({len(highlights)} highlights)")
+                    logger.info(f"Completed processing book {i+1}: {book_title} ({len(book_highlights)} highlights)")
                     
 
                 logger.debug("Closing browser")
                 browser.close()
                 
-                logger.info(f"Scraping completed successfully. Total highlights: {len(all_highlights)} from {books_processed} books")
+                total_highlights = sum(len(book.highlights) for book in all_books_highlights)
+                logger.info(f"Scraping completed successfully. Total highlights: {total_highlights} from {books_processed} books")
                 return create_response(
                     code=200,
                     message="Highlights scraped successfully",
-                    data=[highlight.model_dump() for highlight in all_highlights]
+                    data=[book.model_dump() for book in all_books_highlights]
                 )
 
         except Exception as e:
