@@ -28,7 +28,12 @@ class KindleScraperService:
         logger.info(f"KindleScraperService initialized with headless={headless}")
     
     def _parse_authors(self, author_text: str) -> List[str]:
-        """Parse author text and split by common delimiters"""
+        """Parse author text and split by common delimiters
+        Args:
+            author_text: The text containing author names like "By: Author1, Author2"
+        Returns:
+            A list of author names.
+        """
         if not author_text:
             return ["Unknown Author"]
         
@@ -42,10 +47,8 @@ class KindleScraperService:
     
     def _parse_date(self, date_input: str) -> Optional[str]:
         """Parse date from input field value and convert to mm-dd-yyyy format
-        
         Args:
             date_input: Expected format like "Sunday August 17, 2025" or "August 17, 2025"
-            
         Returns:
             Formatted date string in mm-dd-yyyy format or None if parsing fails
         """
@@ -303,4 +306,3 @@ class KindleScraperService:
                 message=f"Error scraping highlights: {str(e)}",
                 data=None
             )
-    
