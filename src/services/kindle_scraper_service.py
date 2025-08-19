@@ -32,11 +32,9 @@ class KindleScraperService:
         if not author_text:
             return ["Unknown Author"]
         
-        # Remove "By: " prefix if present
         if author_text.startswith("By: "):
             author_text = author_text[4:]
         
-        # Split by common delimiters and clean up
         authors = re.split(r',|\band\b', author_text, flags=re.IGNORECASE)
         authors = [author.strip() for author in authors if author.strip()]
         
@@ -68,7 +66,7 @@ class KindleScraperService:
             logger.warning(f"Could not parse date: {date_input}")
             return None
     
-    def get_highlights(self, email: str, password: str) -> dict:
+    def get_highlights(self, email: str, password: str, manual_puzzle: bool = False) -> dict:
         logger.info("Starting highlights scraping process")
         
         try:
@@ -105,31 +103,33 @@ class KindleScraperService:
 
                 logger.info("Waiting for highlights page to load")
                 
-                try:
-                    for selector in self.puzzle_selectors:
-                        try:
-                            puzzle_element = page.wait_for_selector(selector, timeout=1000)
-                            if puzzle_element:
-                                logger.error(f"Puzzle/captcha detected with selector: {selector}")
-                                browser.close()
-                                return create_response(
-                                    code=400,
-                                    message="Authentication blocked by puzzle/captcha. Please try again later.",
-                                    data=None
-                                )
-                        except:
-                            continue
-                except:
-                    # No puzzle found, continue normally
-                    pass
+                if not manual_puzzle:
+                    try:
+                        for selector in self.puzzle_selectors:
+                            try:
+                                puzzle_element = page.wait_for_selector(selector, timeout=1000)
+                                if puzzle_element:
+                                    logger.error(f"Puzzle/captcha detected with selector: {selector}")
+                                    browser.close()
+                                    return create_response(
+                                        code=400,
+                                        message="Authentication blocked by puzzle/captcha. Please try again later.",
+                                        data=None
+                                    )
+                            except:
+                                continue
+                    except:
+                        # No puzzle found, continue normally
+                        pass
+                else:
+                    logger.info("Manual puzzle mode enabled - waiting for user to resolve any puzzles manually")
                 
-                page.wait_for_selector('.kp-notebook-library-each-book')
+                page.wait_for_selector('.kp-notebook-library-each-book', timeout=60000 if manual_puzzle else 30000)
                 logger.debug("Highlights page loaded successfully")
 
                 books = page.query_selector_all('.kp-notebook-library-each-book')
                 logger.info(f"Found {len(books)} books in library")
                 
-                # Extract book info with unique IDs
                 book_data = []
                 for book in books:
                     book_id = book.get_attribute('id')
@@ -182,6 +182,7 @@ class KindleScraperService:
                     
                     time.sleep(random.uniform(0.3, 0.8))
                     
+                    clicked = False
                     action_selector = f'#{book_id} span[data-action="get-annotations-for-asin"]'
                     action_element = page.query_selector(action_selector)
                     if action_element:
@@ -211,8 +212,8 @@ class KindleScraperService:
                     logger.debug(f"Waiting {delay:.2f}s after highlights loaded")
                     time.sleep(delay)
                     
-                    highlight_containers = page.query_selector_all('.a-row.a-spacing-base')
-                    logger.info(f'Found {len(highlight_containers)} highlight containers for book: {book_title}')
+                    highlights = page.query_selector_all('.kp-notebook-highlight')
+                    logger.info(f'Found {len(highlights)} highlights for book: {book_title}')
                     
                     date_span = page.query_selector('span#kp-notebook-annotated-date')
                     highlight_date = None
@@ -221,40 +222,67 @@ class KindleScraperService:
                         highlight_date = self._parse_date(date_text)
                         logger.debug(f"Extracted date: {date_text} -> {highlight_date}")
                     
-                    book_highlights = []
-                    for container in highlight_containers:
-                        # Extract highlight text
-                        highlight_elem = container.query_selector('.kp-notebook-highlight')
-                        if not highlight_elem:
+                    annotation_containers = page.query_selector_all('#kp-notebook-annotations > div[id*="QTI"]')
+                    highlight_items = []
+                    
+                    for j, container in enumerate(annotation_containers):
+                        type_element = container.query_selector('span#annotationHighlightHeader')
+                        highlight_type = None
+                        location = None
+                        
+                        if type_element:
+                            header_text = type_element.inner_text().strip()
+                            if " | " in header_text:
+                                parts = header_text.split(" | ")
+                                if parts[0].endswith(" highlight"):
+                                    highlight_type = parts[0].replace(" highlight", "")
+                                else:
+                                    highlight_type = parts[0]
+                                
+                                if len(parts) > 1 and parts[1].startswith("Location:"):
+                                    try:
+                                        location = int(parts[1].replace("Location:", "").replace("&nbsp;", "").strip())
+                                    except ValueError:
+                                        location = None
+                            else:
+                                if header_text.endswith(" highlight"):
+                                    highlight_type = header_text.replace(" highlight", "")
+                                else:
+                                    highlight_type = header_text
+                        
+                        highlight_element = container.query_selector('.kp-notebook-highlight span#highlight')
+                        if not highlight_element:
                             continue
                             
-                        highlight_text = highlight_elem.inner_text().strip()
+                        highlight_text = highlight_element.inner_text().strip()
                         
-                        # Extract note if present
-                        note_elem = container.query_selector('.kp-notebook-note span#note')
                         note_text = None
-                        if note_elem:
-                            note_text = note_elem.inner_text().strip()
+                        note_element = container.query_selector('.kp-notebook-note span#note')
+                        if note_element:
+                            note_text = note_element.inner_text().strip()
                             if not note_text:
                                 note_text = None
                         
-                        book_highlights.append(HighlightItem(
+                        highlight_item = HighlightItem(
                             text=highlight_text,
-                            note=note_text
-                        ))
-                    
-                    if book_highlights:
-                        book_highlight = Highlight(
-                            book_title=book_title,
-                            book_author=book_authors,
-                            book_cover=book_cover,
-                            highlights=book_highlights,
-                            date=highlight_date
+                            note=note_text,
+                            type=highlight_type,
+                            page=location
                         )
-                        all_books_highlights.append(book_highlight)
+                        highlight_items.append(highlight_item)
+                        logger.debug(f"Processed highlight {j+1}: Type: {highlight_type}, Location: {location}, Note: {'Yes' if note_text else 'No'}")
+                    
+                    book_highlight = Highlight(
+                        book_title=book_title,
+                        book_author=book_authors,
+                        book_cover=book_cover,
+                        highlights=highlight_items,
+                        date=highlight_date
+                    )
+                    all_books_highlights.append(book_highlight)
                     
                     books_processed += 1
-                    logger.info(f"Completed processing book {i+1}: {book_title} ({len(book_highlights)} highlights)")
+                    logger.info(f"Completed processing book {i+1}: {book_title} ({len(highlight_items)} highlights)")
                     
 
                 logger.debug("Closing browser")

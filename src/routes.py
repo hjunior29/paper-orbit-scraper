@@ -13,9 +13,10 @@ def get_kindle_highlights(
     encrypted: str = Query(None, description="Use secure endpoint with encrypted credentials"),
     email: str = Query(None, description="Amazon account email"),
     password: str = Query(None, description="Amazon account password"),
-    headless: str = Query(None, description="Run browser in headless mode")
+    headless: str = Query(None, description="Run browser in headless mode"),
+    manual_puzzle: str = Query(None, description="Enable manual puzzle solving")
 ):
-    return kindle_handler.get_highlights(encrypted, email, password, headless)
+    return kindle_handler.get_highlights(encrypted, email, password, headless, manual_puzzle)
 
 @router.get("/ping")
 def ping():

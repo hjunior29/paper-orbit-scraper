@@ -12,7 +12,7 @@ class KindleHandler:
         self.kindle_scraper_service = KindleScraperService(headless=False)
         self.crypto_service = CryptoService()
 
-    def get_highlights(self, encrypted: str, email: str, password: str, headless: str = None):
+    def get_highlights(self, encrypted: str, email: str, password: str, headless: str = None, manual_puzzle: str = None):
         logger.info(f"Highlights request received")
 
         if headless is None:
@@ -24,6 +24,18 @@ class KindleHandler:
             return create_response(
                 code=400,
                 message="Param 'headless' must be 'True' or 'False'",
+                data=None
+            )
+
+        if manual_puzzle is None:
+            manual_puzzle = "False"
+            logger.info(f"Using default manual_puzzle: {manual_puzzle}")
+
+        if manual_puzzle not in ["True", "False"]:
+            logger.warning(f"Invalid 'manual_puzzle' parameter: {manual_puzzle}")
+            return create_response(
+                code=400,
+                message="Param 'manual_puzzle' must be True or False",
                 data=None
             )
 
@@ -55,10 +67,13 @@ class KindleHandler:
         
         headless_bool = headless == "True"
         logger.info(f"Headless mode: {headless_bool}")
-        
+
+        manual_puzzle_bool = manual_puzzle == "True"
+        logger.info(f"Manual puzzle mode: {manual_puzzle_bool}")
+
         try:
             scraper = KindleScraperService(headless=headless_bool)
-            return scraper.get_highlights(email, password)
+            return scraper.get_highlights(email, password, manual_puzzle=manual_puzzle_bool)
         except Exception as e:
             logger.error(f"Error getting highlights: {e}")
             return create_response(
