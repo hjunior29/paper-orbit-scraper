@@ -272,6 +272,17 @@ Each handler manages its own service dependencies, keeping the routes file clean
 4. **Monitor logs** for failed authentication attempts
 5. **Rotate keys regularly** for enhanced security
 
+## Important Requirements
+
+**Before using this scraper, you must configure your Amazon account:**
+
+1. **Disable Two-Factor Authentication (2FA)**: Remove 2FA from your Amazon account settings
+2. **Remove Phone Number**: Delete the phone number from your Amazon account profile
+
+These steps are necessary because the automated scraper cannot handle 2FA prompts or phone verification challenges.
+
+⚠️ **Security Note**: Consider using a dedicated Amazon account for scraping purposes rather than your primary account.
+
 ## Troubleshooting
 
 ### Common Issues
